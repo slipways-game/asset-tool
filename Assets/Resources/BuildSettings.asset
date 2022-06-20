@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c941b912c6145bd98ea97bdad66c62d, type: 3}
   m_Name: BuildSettings
   m_EditorClassIdentifier: 
-  target: 
+  target: C:/prod/proj/slipways-mods/mods/example-race/assets

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEngine;
 
 namespace Slipways.Modding
@@ -44,8 +45,12 @@ namespace Slipways.Modding
             ExportBundleWindow window = (ExportBundleWindow)GetWindow(typeof(ExportBundleWindow));
             window.Initialize();
             window.Close();
-            window._export.PerformBuild(window._settings);
-            ShowDone();
+            try {
+                window._export.PerformBuild(window._settings);
+                ShowDone();
+            } catch (BuildFailedException) {
+                // swallow, Unity already logged it
+            }
         }
         
         // === Initialization
@@ -60,8 +65,7 @@ namespace Slipways.Modding
             _settings = Resources.Load<BuildSettings>("BuildSettings");
             // start the export
             _export = new BundleExport(new BundleExport.Settings {
-                SourceFolder = SourceFolder,
-                BundleName = BundleName
+                SourceFolder = SourceFolder
             });
             _export.PrepareForBuild();
             _foundFilesInfo = _export.DescribeAssets().ToList();
@@ -128,9 +132,14 @@ namespace Slipways.Modding
         void Build() {
             EditorUtility.SetDirty(_settings);
             AssetDatabase.SaveAssetIfDirty(_settings);
-            _export.PerformBuild(_settings);
-            Close();
-            ShowDone();
+            try {
+                _export.PerformBuild(_settings);
+                ShowDone();
+            } catch (BuildFailedException) {
+                // swallow, Unity already logged it
+            } finally {
+                Close();
+            }
         }
 
         static void ShowDone() {

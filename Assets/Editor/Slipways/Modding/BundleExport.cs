@@ -1,8 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Slipways.General.Modding.API;
 using UnityEditor;
+using UnityEditor.Build;
+using UnityEngine;
 
 namespace Slipways.Modding
 {
@@ -15,7 +18,6 @@ namespace Slipways.Modding
 
         public class Settings {
             public string SourceFolder { get; set; }
-            public string BundleName { get; set; }
         }
         
         public Settings CurrentSettings { get; }
@@ -23,6 +25,7 @@ namespace Slipways.Modding
         // === Data
 
         List<string> _scannedAssets;
+        string _bundleName;
         
         // === Constructors
 
@@ -34,22 +37,32 @@ namespace Slipways.Modding
 
         public void PrepareForBuild() {
             _scannedAssets = GetRelevantAssets().ToList();
-            AssignAssetsToBundle(_scannedAssets, CurrentSettings.BundleName);
+            _bundleName = Guid.NewGuid().ToString().Substring(24) + ".unity3d";
         }
 
         public void PerformBuild(BuildSettings settings) {
+            //AssignAssetsToBundle(_scannedAssets, _bundleName);
             BuildForPlatform(settings, BuildPlatform.Windows);
             BuildForPlatform(settings, BuildPlatform.Mac);
         }
 
         public void BuildForPlatform(BuildSettings settings, BuildPlatform platform) {
             string outputFolder = settings.TargetFolder;
-            string builtName = CurrentSettings.BundleName;
+            string builtName = _bundleName;
             string targetName = $"{settings.TargetFile}.{platform.BundleExtension}";
-            BuildPipeline.BuildAssetBundles(outputFolder, 
+            AssetBundleBuild abb = new AssetBundleBuild {
+                assetBundleName = _bundleName,
+                assetNames = _scannedAssets.Select(sa => "Assets/" + sa).ToArray()
+            };
+            AssetBundleManifest result = BuildPipeline.BuildAssetBundles(outputFolder,
+                new[] {abb},
                 BuildAssetBundleOptions.None,
                 platform.UnityTarget);
-            RenameAndDeleteGarbage(outputFolder, builtName, targetName);
+            if (result != null) {
+                RenameAndDeleteGarbage(outputFolder, builtName, targetName);
+            } else {
+                throw new BuildFailedException("Failed to create the bundle.");
+            }
         }
 
         // === Describing the build
@@ -78,6 +91,23 @@ namespace Slipways.Modding
         {
             Queue<string> dirs = new Queue<string>();
             dirs.Enqueue(CurrentSettings.SourceFolder);
+            string fullDir = Path.GetFullPath("Assets").Replace("\\", "/");
+            while (dirs.Count > 0) {
+                string current = dirs.Dequeue();
+                foreach (var subDir in Directory.GetDirectories(current)) {
+                    dirs.Enqueue(subDir);
+                }
+                foreach (var file in Directory.GetFiles(current)) {
+                    if (file.EndsWith(".meta")) continue;
+                    string fullPath = Path.GetFullPath(file).Replace("\\", "/");
+                    yield return fullPath.Substring(fullDir.Length + 1);
+                }
+            }
+        }
+
+        public IEnumerable<string> GetIrrelevantAssets() {
+            Queue<string> dirs = new Queue<string>();
+            dirs.Enqueue("Assets");
             string fullDir = Path.GetFullPath("Assets").Replace("\\", "/");
             while (dirs.Count > 0) {
                 string current = dirs.Dequeue();
